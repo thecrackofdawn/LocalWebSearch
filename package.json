@@ -1,0 +1,34 @@
+{
+  "name": "localwebsearch",
+  "version": "0.1.0",
+  "description": "Local browser-based web search and URL reading MCP tool",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "localwebsearch": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "playwright-stealth": "^0.0.1",
+    "@mozilla/readability": "^0.5.0",
+    "turndown": "^7.1.2",
+    "commander": "^11.1.0",
+    "@modelcontextprotocol/sdk": "~1.0.0",
+    "chalk": "^4.1.2",
+    "jsdom": "^23.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/turndown": "^5.0.4",
+    "@types/jsdom": "^21.1.6",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "tsx": "^4.6.0"
+  }
+}
