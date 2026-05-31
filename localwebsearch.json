@@ -1,0 +1,12 @@
+{
+  "engine": "google",
+  "results": 10,
+  "stealth": true,
+  "timeout": 30000,
+  "retries": 3,
+  "browser": {
+    "headless": false,
+    "userAgent": null,
+    "profilePath": "./browser_profile"
+  }
+}

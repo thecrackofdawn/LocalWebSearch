@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Browser profiles (runtime data)
+browser_profile/
+test_browser_profile/
+
+# Local config override (user-specific)
+localwebsearch.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
