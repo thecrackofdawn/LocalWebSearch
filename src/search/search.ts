@@ -4,6 +4,7 @@ import { withRetry } from '../retry/retry.js';
 import { JSDOM } from 'jsdom';
 import { extractResults } from './extract.js';
 import { describeSearchPage } from './diagnostics.js';
+import { getDefaultLogger } from '../logger/logger.js';
 
 export interface SearchResult {
   title: string;
@@ -84,17 +85,19 @@ export class SearchEngine {
     const dom = new JSDOM(html, { url: searchUrl });
     const results = extractResults(dom.window.document, numResults);
 
-    // Diagnostics go to stderr (stdout is reserved for the MCP protocol).
-    // One-line summary on every search; an extended snapshot when empty so the
-    // cause is visible from logs without re-running by hand.
+    // Log to the rotating file logger (which also mirrors to stderr; stdout is
+    // reserved for the MCP protocol). One-line summary on every search; an
+    // extended snapshot when empty so the cause is visible from logs without
+    // re-running by hand.
     const elapsed = Date.now() - t0;
-    console.error(
+    const logger = getDefaultLogger();
+    logger.info(
       `[websearch] query=${JSON.stringify(query)} results=${results.length} ` +
         `time=${elapsed}ms status=${httpStatus} signalTimedOut=${signalTimedOut} url=${finalUrl}`
     );
     if (results.length === 0) {
       const diag = describeSearchPage(dom.window.document, finalUrl);
-      console.error(`[websearch] empty results diagnostic: ${JSON.stringify(diag)}`);
+      logger.warn(`[websearch] empty results diagnostic: ${JSON.stringify(diag)}`);
     }
 
     return results;
