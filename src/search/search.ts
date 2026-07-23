@@ -3,6 +3,7 @@ import { Config } from '../config/config.js';
 import { withRetry } from '../retry/retry.js';
 import { JSDOM } from 'jsdom';
 import { extractResults } from './extract.js';
+import { describeSearchPage } from './diagnostics.js';
 
 export interface SearchResult {
   title: string;
@@ -42,13 +43,19 @@ export class SearchEngine {
 
   private async performSearch(page: any, query: string, numResults: number): Promise<SearchResult[]> {
     const searchUrl = this.buildSearchUrl(query, numResults);
+    const t0 = Date.now();
 
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
+    const response = await page.goto(searchUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: this.config.timeout,
+    });
+    const httpStatus = response?.status() ?? null;
 
     // Wait for the structural result signal (an anchor wrapping an <h3>) rather
     // than a brittle, rotated class name like div.g / div.tF2Cxc. Resolves as
     // soon as the first result renders; non-fatal on timeout (we extract
     // whatever has rendered).
+    let signalTimedOut = false;
     await page
       .waitForFunction(
         () =>
@@ -58,7 +65,7 @@ export class SearchEngine {
         { timeout: 8000 }
       )
       .catch(() => {
-        // No results yet; fall through and extract whatever rendered.
+        signalTimedOut = true;
       });
 
     // Brief settle so progressively-rendered sibling results are present before
@@ -72,9 +79,25 @@ export class SearchEngine {
     // also broke under transpilers that inject helpers like __name). It is also
     // far faster than the old per-element Playwright locator loop, which burned
     // the full default timeout on every non-result element.
+    const finalUrl = page.url();
     const html = await page.content();
     const dom = new JSDOM(html, { url: searchUrl });
-    return extractResults(dom.window.document, numResults);
+    const results = extractResults(dom.window.document, numResults);
+
+    // Diagnostics go to stderr (stdout is reserved for the MCP protocol).
+    // One-line summary on every search; an extended snapshot when empty so the
+    // cause is visible from logs without re-running by hand.
+    const elapsed = Date.now() - t0;
+    console.error(
+      `[websearch] query=${JSON.stringify(query)} results=${results.length} ` +
+        `time=${elapsed}ms status=${httpStatus} signalTimedOut=${signalTimedOut} url=${finalUrl}`
+    );
+    if (results.length === 0) {
+      const diag = describeSearchPage(dom.window.document, finalUrl);
+      console.error(`[websearch] empty results diagnostic: ${JSON.stringify(diag)}`);
+    }
+
+    return results;
   }
 
   private buildSearchUrl(query: string, numResults: number): string {
