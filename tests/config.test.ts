@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConfigManager } from '../src/config/config.js';
+import { ConfigManager, DEFAULT_USER_AGENT } from '../src/config/config.js';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -27,7 +27,7 @@ describe('ConfigManager', () => {
       retries: 3,
       browser: {
         headless: true,
-        userAgent: null,
+        userAgent: DEFAULT_USER_AGENT,
         profilePath: join(homedir(), '.localwebsearch', 'browser_profile')
       }
     });
