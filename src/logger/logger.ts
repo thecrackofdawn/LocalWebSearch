@@ -1,7 +1,7 @@
 import { mkdirSync } from 'fs';
 import { appendFile, readFile, rename, stat, truncate, unlink, writeFile } from 'fs/promises';
-import { dirname, join, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { homedir } from 'os';
+import { join } from 'path';
 import { gzipSync } from 'zlib';
 
 export type LogLevel = 'info' | 'warn' | 'error';
@@ -22,14 +22,16 @@ export interface LoggerOptions {
 const ONE_MB = 1024 * 1024;
 
 /**
- * Default log directory: a `logs/` folder at the deployed module's root.
- * This file lives at `<root>/{src,dist}/logger/logger.{ts,js}`, so the module
- * root is two directories up -- which resolves correctly whether the server runs
- * from source (tsx) or the compiled dist build.
+ * Default log directory: `~/.localwebsearch/logs/`.
+ *
+ * All runtime data lives under `~/.localwebsearch/` (config, browser profile,
+ * cookies), so logs go there too. An earlier version wrote to a `logs/` folder
+ * at the deployed module root, which broke for npx/global installs -- the module
+ * root lands in the npm cache or global node_modules, a location that is not
+ * user-accessible and may be wiped on update.
  */
 export function getDefaultLogDir(): string {
-  const here = fileURLToPath(import.meta.url);
-  return join(resolve(dirname(here), '..', '..'), 'logs');
+  return join(homedir(), '.localwebsearch', 'logs');
 }
 
 /**
@@ -159,7 +161,7 @@ export class Logger {
 
 let defaultLogger: Logger | null = null;
 
-/** Process-wide logger writing to the default (module-root) logs directory. */
+/** Process-wide logger writing to the default (`~/.localwebsearch/logs/`) directory. */
 export function getDefaultLogger(): Logger {
   if (!defaultLogger) {
     defaultLogger = new Logger({ logDir: getDefaultLogDir() });
