@@ -135,7 +135,7 @@ Links, images, and formatting are preserved where possible.
 }
 ```
 
-所有数据文件（浏览器配置、Cookie、缓存等）统一保存在 `~/.localwebsearch/` 目录下，不会污染调用方项目目录。
+所有数据文件（浏览器配置、Cookie、缓存、日志等）统一保存在 `~/.localwebsearch/` 目录下，不会污染调用方项目目录。运行日志位于 `~/.localwebsearch/logs/`（按 1 MiB 轮转、gzip 压缩，保留最近 5 份归档）。
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
@@ -223,6 +223,18 @@ MCP 工具调用 → BrowserManager.restartIfNeeded() → 创建新标签页 →
 内容处理管线:
 页面加载 → DOM 就绪等待 → JSDOM 解析 → Readability 提取 → Turndown 转 Markdown
 ```
+
+## 待办 (TODO)
+
+### 支持多客户端 / 并发
+
+当前架构基于 **stdio**，是 1 客户端 : 1 进程模型，**不支持**多客户端共享同一个常驻服务，也未为并发设计。具体限制：
+
+- [ ] **传输层**：stdio 决定只有一个父进程。若要支持多客户端共享常驻服务，需改用 **Streamable HTTP** 传输（`@modelcontextprotocol/sdk` 已支持）。
+- [ ] **进程级 profile 冲突**：多个进程默认指向同一 `~/.localwebsearch/browser_profile/`，Chromium 会对该 user-data-dir 加文件锁（`SingletonLock`），第二个进程启动会失败/降级。需改为每会话独立 profile 或加 profile 锁池。
+- [ ] **单客户端并发竞态**：`BrowserManager` 的可复用页面池只有 1 个槽位，且 `restartIfNeeded()` / `close()` / `launchBrowser()` 无 mutex。需加请求队列/锁，把 `createPage → 操作 → releasePage` 串行化或改为每请求独立 context。
+
+> 详见对话记录中的多客户端支持分析；如要推进，建议先走 brainstorming 拆解方案。
 
 ## 许可证
 
