@@ -1,6 +1,8 @@
 import { BrowserManager } from '../browser/browser.js';
 import { Config } from '../config/config.js';
 import { withRetry } from '../retry/retry.js';
+import { JSDOM } from 'jsdom';
+import { extractResults } from './extract.js';
 
 export interface SearchResult {
   title: string;
@@ -41,58 +43,38 @@ export class SearchEngine {
   private async performSearch(page: any, query: string, numResults: number): Promise<SearchResult[]> {
     const searchUrl = this.buildSearchUrl(query, numResults);
 
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(500); // Brief pause for JS execution
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: this.config.timeout });
 
-    // Wait for main selector to be present (avoid empty array issue)
-    await page.waitForSelector('div.g', { timeout: 3000 }).catch(() => {
-      // Ignore if primary selector not found, will try alternatives
-    });
+    // Wait for the structural result signal (an anchor wrapping an <h3>) rather
+    // than a brittle, rotated class name like div.g / div.tF2Cxc. Resolves as
+    // soon as the first result renders; non-fatal on timeout (we extract
+    // whatever has rendered).
+    await page
+      .waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll('a')).some(
+            (a) => !!a.querySelector('h3') && !!a.getAttribute('href')
+          ),
+        { timeout: 8000 }
+      )
+      .catch(() => {
+        // No results yet; fall through and extract whatever rendered.
+      });
 
-    // Multiple selector strategies for robustness
-    const selectors = [
-      'div.g',           // Standard Google results
-      'div[data-hveid]', // Alternative structure
-      'div.tF2Cxc',      // Mobile/responsive
-    ];
+    // Brief settle so progressively-rendered sibling results are present before
+    // we snapshot the DOM.
+    await page.waitForTimeout(500);
 
-    let results: SearchResult[] = [];
-
-    for (const selector of selectors) {
-      try {
-        const elements = await page.locator(selector).all();
-
-        if (elements.length > 0) {
-          for (const element of elements.slice(0, numResults)) {
-            try {
-              const titleEl = element.locator('h3').first();
-              const linkEl = element.locator('a').first();
-              const snippetEl = element.locator('div[style*="-webkit-line-clamp"]').first();
-
-              const title = await titleEl.textContent() || '';
-              const url = await linkEl.getAttribute('href') || '';
-              const snippet = await snippetEl.textContent() || '';
-
-              if (title && url) {
-                results.push({ title, url, snippet: snippet || '' });
-              }
-            } catch (e) {
-              // Skip malformed results
-              continue;
-            }
-          }
-
-          if (results.length >= numResults) {
-            break;
-          }
-        }
-      } catch (e) {
-        // Try next selector
-        continue;
-      }
-    }
-
-    return results.slice(0, numResults);
+    // Extract in Node (not in-page): grab the rendered HTML and parse it with
+    // JSDOM, then run the pure, unit-tested extractor on the resulting document.
+    // This mirrors src/reader/reader.ts, keeps a single source of truth for the
+    // extraction logic, and avoids shipping JS into the page (which previously
+    // also broke under transpilers that inject helpers like __name). It is also
+    // far faster than the old per-element Playwright locator loop, which burned
+    // the full default timeout on every non-result element.
+    const html = await page.content();
+    const dom = new JSDOM(html, { url: searchUrl });
+    return extractResults(dom.window.document, numResults);
   }
 
   private buildSearchUrl(query: string, numResults: number): string {

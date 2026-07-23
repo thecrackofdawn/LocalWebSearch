@@ -79,9 +79,23 @@ Never use `require()` - it does not exist in ESM mode.
 3. **Turndown:** Convert to Markdown (90% size reduction for AI consumption)
 4. **Fallback:** If Readability fails, use raw HTML
 
-### Search Engine Limitations
+### Search Result Extraction
 
-**SearchEngine** (`src/search/search.ts`) may return 0 results during real Google searches due to anti-bot measures. This is expected - even with stealth, Google can block automated scrapers. The implementation is correct; external factors cause the failure.
+**SearchEngine** (`src/search/search.ts`) extracts results via a pure, unit-tested
+extractor (`src/search/extract.ts`) run on a JSDOM parse of the rendered page HTML.
+
+The extractor is **deliberately class-name-independent**. Google rotates its
+obfuscated result-container classes (`div.g`, `div.tF2Cxc`, `div.MjjYud`, …) every
+few weeks, so selectors based on them silently return 0 results after each rotation
+(this was a real bug — a previous `div.g`/`div[data-hveid]` selector strategy plus
+per-element Playwright locator timeouts returned empty/slow results and was
+mistakenly attributed to "anti-bot"). Instead it relies on a structural invariant:
+every organic result is an `<a href>` wrapping an `<h3>` title and pointing off-site.
+
+Do **not** assume empty results are anti-bot. Verify first (e.g. dump
+`page.url()`, `page.title()`, and `document.querySelectorAll('a')` count). Genuine
+anti-bot (`/sorry/` captcha, consent page) can still occur, but it is the exception,
+not the default.
 
 ### Configuration System
 
